@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# Historiales/compilados
+.zshrc.zwc
+.zsh_history
+.viminfo
+netrwhist
+*.swp
+*.swo
+*.un~
+*.tmp
+
+# Cachés varias
+**/.cache/
+**/.DS_Store
+
+# Binarios de pruebas
+*.out

@@ -1,0 +1,177 @@
+" ==========================
+"   VIM CONFIG — ITSALEXITO
+" ==========================
+
+set nocompatible
+set termguicolors
+syntax on
+filetype plugin indent on
+
+" --- Plugins (header + árbol + tema opcional) ---
+call plug#begin('~/.vim/plugged')
+Plug '42Paris/42header'
+Plug 'preservim/nerdtree'
+Plug 'morhetz/gruvbox'
+call plug#end()
+
+" --- Tema/UI (legible) ---
+set background=dark
+if !empty(glob('~/.vim/plugged/gruvbox'))
+  let g:gruvbox_contrast_dark='hard'
+  colorscheme gruvbox
+else
+  colorscheme desert
+endif
+set number              " Números de línea fijos
+" set relativenumber    " Desactivado para que no cambien
+set cursorline
+set colorcolumn=80
+
+" --- Indentación norma 42 ---
+set tabstop=8
+set shiftwidth=8
+set noexpandtab
+set autoindent
+set smartindent
+
+" ==========================
+"  Header 42 — SOLO plugin (NO tocar)
+" ==========================
+let g:user42 = 'agarcia2'
+let g:mail42 = 'agarcia2@student.42barcelona.com'
+
+function! s:MaybeStdheader() abort
+  if exists(':Stdheader') != 2 | return | endif
+  if line('$') <= 1 && getline(1) ==# ''
+    execute 'Stdheader'
+  endif
+endfunction
+
+augroup itsalexito_header42
+  autocmd!
+  autocmd BufNewFile *.c,*.h ++nested call s:MaybeStdheader()
+  autocmd BufFilePost *.c,*.h if line('$')<=1 && getline(1)==#'' | call s:MaybeStdheader() | endif
+  autocmd BufReadPost *.c,*.h if getfsize(expand('%'))==0 && line('$')<=1 | call s:MaybeStdheader() | endif
+augroup END
+
+" ==========================
+"  NERDTree — SIEMPRE abierto
+" ==========================
+let g:NERDTreeWinPos='left'
+let g:NERDTreeWinSize=28
+let g:NERDTreeMinimalUI=1
+
+augroup itsalexito_nerdtree
+  autocmd!
+  autocmd StdinReadPre * let s:std_in=1
+  autocmd VimEnter * ++once if exists(':NERDTree') && argc() == 0 && !exists('s:std_in') |
+        \ NERDTree | wincmd p | endif
+  autocmd VimEnter * ++once if exists(':NERDTree') && argc() == 1 && isdirectory(argv()[0]) && !exists('s:std_in') |
+        \ execute 'NERDTree' fnameescape(argv()[0]) | wincmd p | endif
+  autocmd VimEnter * ++once if exists(':NERDTree') && argc() == 1 && !isdirectory(argv()[0]) |
+        \ NERDTree | wincmd p | endif
+  autocmd BufEnter * if winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | quit | endif
+augroup END
+
+nnoremap <silent> <D-e> :NERDTreeToggle<CR>
+
+" ==========================
+"  Build / Run / RunArgs / Debug (Norminette obligatorio)
+" ==========================
+function! s:Build42() abort
+  if &modified | update | endif
+  let l:src = expand('%:p')
+  if empty(l:src) | echo "❗ No hay archivo" | return | endif
+
+  " Norminette: aborta si falla
+  let l:norm = system('norminette ' . shellescape(l:src))
+  if v:shell_error != 0
+    echohl ErrorMsg | echo "❌ Norminette ha detectado errores:" | echohl None
+    echo l:norm
+    return
+  else
+    echohl ModeMsg | echo "✅ Norminette OK" | echohl None
+  endif
+
+  " Compilar
+  let l:out = expand('%:r') . '.out'
+  execute '!' . 'gcc -g -Wall -Werror -Wextra ' . shellescape(l:src) . ' -o ' . shellescape(l:out)
+  if v:shell_error == 0
+    echo '✅ ' . l:out . ' creado.'
+  else
+    echohl ErrorMsg | echo "❌ Error al compilar" | echohl None
+  endif
+endfunction
+
+function! s:Run42() abort
+  call s:Build42()
+  let l:out = expand('%:r') . '.out'
+  if filereadable(l:out)
+    execute '!' . shellescape('./' . l:out)
+  endif
+endfunction
+
+function! s:Run42Args() abort
+  call s:Build42()
+  let l:out = expand('%:r') . '.out'
+  if !filereadable(l:out) | return | endif
+  let l:args = input('Args: ')
+  if has('terminal')
+    botright split | resize 12
+    execute 'terminal ' . shellescape('./' . l:out) . (empty(l:args) ? '' : ' ' . l:args)
+  else
+    execute '!' . shellescape('./' . l:out) . (empty(l:args) ? '' : ' ' . l:args)
+  endif
+endfunction
+
+function! s:Debug42() abort
+  call s:Build42()
+  let l:out = expand('%:r') . '.out'
+  if !filereadable(l:out) | return | endif
+  if has('terminal')
+    botright split | resize 16
+    execute 'terminal gdb -q ' . shellescape('./' . l:out)
+  else
+    execute '!gdb -q ' . shellescape('./' . l:out)
+  endif
+endfunction
+
+command! Build42   call s:Build42()
+command! Run42     call s:Run42()
+command! Run42Args call s:Run42Args()
+command! Debug42   call s:Debug42()
+
+" Keybinds (macOS)
+nnoremap <silent> <D-b> :Build42<CR>
+nnoremap <silent> <D-r> :Run42<CR>
+nnoremap <silent> <D-R> :Run42Args<CR>
+nnoremap <silent> <D-d> :Debug42<CR>
+
+" ==========================
+"  Autocompletado nativo usable
+" ==========================
+set completeopt=menu,menuone,noselect
+set shortmess+=c
+autocmd FileType c,cpp,objc setlocal omnifunc=ccomplete#Complete
+inoremap <silent> <D-Space> <C-x><C-o>
+inoremap <expr> <CR>    pumvisible() ? "\<C-y>"  : "\<CR>"
+inoremap <expr> <Tab>   pumvisible() ? "\<C-n>"  : "\<Tab>"
+inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>"  : "\<S-Tab>"
+
+" ==========================
+"  QoL / navegación
+" ==========================
+nnoremap <silent> <D-h> <C-w>h
+nnoremap <silent> <D-j> <C-w>j
+nnoremap <silent> <D-k> <C-w>k
+nnoremap <silent> <D-l> <C-w>l
+nnoremap <silent> <D-s> :update<CR>
+inoremap <silent> <D-s> <Esc>:update<CR>a
+set showcmd
+set showmatch
+set wildmenu
+set laststatus=2
+set splitbelow
+set splitright
+set clipboard=unnamedplus
+set nowrap
